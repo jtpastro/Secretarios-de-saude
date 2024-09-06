@@ -1,0 +1,207 @@
+--- 
+title: "Duração de mandato nas Secretarias Estaduais de Saúde"
+author: "Alexandra Emanuela Novais Silva"
+date: "2024-09-04"
+output:
+  slidy_presentation: default
+  ioslides_presentation: default
+subtitle: uma análise de como o gênero afeta o tempo dos mandatos nas regiões brasileiras
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+```
+
+
+# Apresentação
+
+---
+
+Nesse documento, nós analisamos a duração de mandato de secretários de saúde estaduais do Brasil durante 10 anos, de 2006 a 2016. Esse cargo faz parte da burocracia de alto escalão subnacional e é comissionado, ou seja, indicado pelos governadores estaduais. Cada estado possui um
+secretario estadual desaúde. É importante ressaltar que,a base de dados foi construída manualmente pelos autores, por meio de levantamento documental. Isso ocorreu devido a ausência de uma base consolidada
+disponível para acesso público.
+
+---
+
+
+# Análises
+
+## Pacotes
+
+---
+
+Instalar os seguintes pacotes:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, results='hide'}
+
+install.packages("readxl")
+install.packages("dplyr")
+install.packages("lubridate")
+install.packages("ggplot2")
+install.packages("knitr")
+install.packages("rmarkdown")
+install.packages("TeachingDemos")
+```
+
+---
+
+Carregar os seguintes pacotes:
+```{r echo=TRUE, message=FALSE, warning=FALSE, results='hide'}
+library(readxl)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(TeachingDemos)
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE, results='hide'}
+
+file.choose()
+Secretarios_de_saude_CO <- read_excel("C:/Users/Aleno/OneDrive/Área de Trabalho/Lista 3/_Secretarios de saúde 2.xlsx")
+Secretarios_de_saude_Norte <- read_excel("C:/Users/Aleno/OneDrive/Área de Trabalho/Lista 3/_Secretarios de saúde 2.xlsx", sheet = "Norte")
+Secretarios_de_saude_Nordeste <- read_excel("C:/Users/Aleno/OneDrive/Área de Trabalho/Lista 3/_Secretarios de saúde 2.xlsx", sheet = "Nordeste")
+Secretarios_de_saude_Sudeste <- read_excel("C:/Users/Aleno/OneDrive/Área de Trabalho/Lista 3/_Secretarios de saúde 2.xlsx", sheet = "Sudeste")
+Secretarios_de_saude_Sul <- read_excel("C:/Users/Aleno/OneDrive/Área de Trabalho/Lista 3/_Secretarios de saúde 2.xlsx", sheet = "Sul")
+
+```
+
+
+# Selecionando dados de intesse
+
+---
+
+Aqui definimos as variáveis de duração dos mandatos como númericas, criamos a coluna duração do mandato e criamos a coluna Regiao. A última servirá para agregarmos dados de todas as regiões.
+
+```{r echo=TRUE}
+prepare_data <- function(df, nome_regiao) {df %>% 
+mutate( Mandato_Inicio = 
+as.numeric(Mandato_Inicio), Mandato_Final = as.numeric(Mandato_Final), 
+duracao_mandato = (Mandato_Final - Mandato_Inicio) + 1 ) %>% 
+select(Gênero, duracao_mandato) %>% mutate(nome_regiao)}
+
+```
+
+---
+
+
+Também juntamos os dados das regiões para posteriormente 
+apresentarmos os dados conjuntos por região de forma agregada. 
+
+
+```{r echo=TRUE}
+secretarios_combinados <- bind_rows(
+  prepare_data(Secretarios_de_saude_CO, "Centro-Oeste"),
+  prepare_data(Secretarios_de_saude_Norte, "Norte"),
+  prepare_data(Secretarios_de_saude_Nordeste, "Nordeste"),
+  prepare_data(Secretarios_de_saude_Sudeste, "Sudeste"),
+  prepare_data(Secretarios_de_saude_Sul,"Sul"))
+```
+
+---
+
+Agora omitimos dados que que possuem valores ausentes:
+
+```{r echo=TRUE}
+secretarios_combinados <- na.omit(secretarios_combinados)
+```
+
+
+# Intervalo de Confiança
+
+---
+
+Agora criamos um dataframe chamado intervalo de confiança com as
+variáveis: media da duração do mandato; variância da duração do mandato;
+a raiz da variância, que é igual ao desvio padrão; o n, que refe-se ao
+tamanho da amostra;e o erro padrão.Todas essas são calculadas referentes
+a cada região e ao gênero.
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+intervalo_confiança <- secretarios_combinados %>%
+  group_by(Gênero, nome_regiao) %>%
+  summarise( media = mean(duracao_mandato, na.rm = TRUE),       
+    variancia = var(duracao_mandato, na.rm = TRUE),   
+    raiz_variancia = sqrt(variancia),   
+    n = n(),                             
+    erro_padrao = sqrt(variancia) / sqrt(n))
+
+```
+
+
+## Calculando a Margem de Erro
+
+
+Aqui criamos uma coluna para margem de erro dentro do dataframe e o
+calculamos. 
+
+
+```{r echo=TRUE}
+margem_erro <- intervalo_confiança %>%
+  mutate(
+    margem_erro = qt (0.975, df = n - 1) * erro_padrao)
+```
+
+---
+
+Calculando os limites inferior e superior e criando uma coluna para
+margem de erro.
+
+
+```{r echo=TRUE}
+intervalo_confiança <- margem_erro %>%
+  mutate(
+    limite_inferior = media - margem_erro,  
+    limite_superior = media + margem_erro)
+```
+
+
+# Resultado do Intervalo de Confiança
+
+---
+
+```{r echo=FALSE}
+print(intervalo_confiança)
+```
+
+
+# Gráfico
+
+---
+
+
+Agora, geramos o gráfico de intervalo de confiança, já que temos os dados que precisamos. 
+Como olhamos para gênero e duração do madatos, estes dados serão apresentados 
+em conjunto. 
+
+---
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+ggplot(intervalo_confiança, aes(x = Gênero, y = media, color = Gênero, group = Gênero)) +
+  geom_point(size = 1) +  
+  geom_errorbar(aes(ymin = limite_inferior, ymax = limite_superior), width = 0.2) +
+  facet_wrap(~ nome_regiao, scales = "free") +  
+  scale_color_manual(values = c("F" = "hotpink", "M" = "orange")) +
+  labs(title = "Duração do Mandato por Gênero e Região",
+       x = "Gênero",
+       y = "Duração do Mandato",
+       color = "Gênero") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),  
+        strip.text = element_text(size = 12),  legend.position = "bottom")
+
+
+```
+
+
+
+# Hipótese
+
+Nossa hipótese é de que independente da região, as mulheres tendem a ter
+mandatos menores. 
